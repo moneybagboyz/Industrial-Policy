@@ -1,0 +1,28 @@
+scenario_id: baseline_1990_country_a
+start_year: 1990
+end_year: 2100
+country:
+  id: country_a
+  name: Republic of Aster
+  regions: 10
+  population: 12000000
+macro:
+  nominal_gdp: 250000000000
+  debt_stock: 120000000000
+  reserves: 6.0
+  policy_rate: 0.08
+  inflation_expectation: 0.01
+trade:
+  exports: 9000000000
+  imports: 10000000000
+  net_factor_income: 300000000
+  transfers: 200000000
+social:
+  trust: 48.0
+  legitimacy: 52.0
+  inequality: 46.0
+  unemployment: 0.09
+  population_growth_monthly: 0.0005
+notes:
+  - Baseline one-country scenario for Phase 9 balancing loop.
+  - Values are initial placeholders and expected to be calibrated.

@@ -1,0 +1,29 @@
+pricing:
+  lambda_cost: 0.35
+  lambda_demand: 0.20
+  lambda_fx: 0.15
+  lambda_expectations: 0.20
+labor:
+  phi_productivity: 0.60
+  phi_slack: 0.35
+  phi_expectations: 0.45
+fiscal_external:
+  psi1: 0.50
+  psi2: 0.20
+  psi3: 0.40
+social:
+  m1: 0.40
+  m2: 0.30
+  m3: 0.20
+  m4: 0.30
+  theta1: 20.0
+  theta2: 40.0
+  theta3: 30.0
+  theta4: 0.2
+  theta5: 0.3
+  theta6: 0.2
+  theta7: 0.1
+gates:
+  gdp_identity_residual_ratio_max: 0.001
+  sector_residual_abs_max: 0.000001
+  social_population_residual_abs_max: 0.000001

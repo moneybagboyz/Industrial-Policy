@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "country-simulation"
+version = "0.1.0"
+description = "Simulation-first country strategy game core"
+requires-python = ">=3.11"
+dependencies = [
+	"PyYAML>=6.0",
+	"textual>=0.60",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

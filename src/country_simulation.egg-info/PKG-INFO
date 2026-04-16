@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: country-simulation
+Version: 0.1.0
+Summary: Simulation-first country strategy game core
+Requires-Python: >=3.11
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: textual>=0.60
