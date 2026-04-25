@@ -1,0 +1,25 @@
+scenario_id: import_substitution_1990_country_a
+start_year: 1990
+end_year: 2100
+economy_preset: import_substitution
+country:
+  id: country_a
+  name: Republic of Aster (Import Substitution Variant)
+  population: 12500000
+preset_modifiers:
+  macro:
+    industrial_policy_bias: 0.80
+    infrastructure_spend_share: 0.32
+    diplomacy_posture: 0.44
+  trade:
+    imports: 7600000000
+  social:
+    trust: 51.0
+    legitimacy: 55.0
+macro:
+  policy_rate: 0.075
+social:
+  unemployment: 0.09
+notes:
+  - State-led industrial deepening with stronger infrastructure push.
+  - Uses preset_modifiers to tune policy intensity without duplicating full sections.

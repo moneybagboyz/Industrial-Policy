@@ -11,6 +11,14 @@ from src.econ.building_engine import (
     seed_buildings_for_subregion,
     update_subregion_buildings,
 )
+from src.econ.commodity_registry import (
+    build_empty_commodity_state,
+    apply_storage_decay,
+)
+from src.econ.logistics_network import (
+    update_logistics_state,
+    build_initial_logistics_state,
+)
 
 ARCHETYPES: tuple[str, ...] = (
     "agro_periphery",
@@ -298,6 +306,23 @@ def _derive_geo_profile(archetype: str, row: dict[str, float | str], seed_int: i
     return geo
 
 
+def _apply_commodity_flows(
+    current_stocks: dict[str, float] | None,
+    produced: dict[str, float],
+    consumed: dict[str, float],
+) -> dict[str, float]:
+    """Return updated commodity stocks after applying production, consumption, and decay.
+
+    Does not mutate inputs.
+    """
+    stocks = dict(current_stocks) if isinstance(current_stocks, dict) else build_empty_commodity_state()
+    for cid, amount in produced.items():
+        stocks[cid] = stocks.get(cid, 0.0) + amount
+    for cid, amount in consumed.items():
+        stocks[cid] = max(0.0, stocks.get(cid, 0.0) - amount)
+    return apply_storage_decay(stocks)
+
+
 def _build_subregions(state_name: str, state_row: dict[str, float | str], scenario_seed: int, idx: int) -> dict[str, dict[str, float | str]]:
     names = ("north", "central", "south")
     subregions: dict[str, dict[str, float | str]] = {}
@@ -356,6 +381,7 @@ def _build_subregions(state_name: str, state_row: dict[str, float | str], scenar
             "coord_y": _clamp(base_y + offset_y, 0.0, 100.0),
             "geo_profile": sub_geo,
             "buildings": buildings,
+            "commodity_stocks": build_empty_commodity_state(),
         }
 
     total = sum(float(v["population_share"]) for v in subregions.values())
@@ -624,13 +650,15 @@ def update_region_economies(
 
                 # Run building engine for this subregion
                 prev_buildings = sub.get("buildings", [])
-                updated_buildings = update_subregion_buildings(
+                _buildings_result = update_subregion_buildings(
                     buildings=prev_buildings if isinstance(prev_buildings, list) else [],
                     sector_demand_signals=_demand_signals,
                     maintenance_spend=_maintenance_spend,
                     human_capital=_human_cap,
                     prior_state=prior_state,
-                ) if prev_buildings else []
+                    regional_stocks=sub.get("commodity_stocks"),
+                ) if prev_buildings else ([], {}, {})
+                updated_buildings, _sub_produced, _sub_consumed = _buildings_result
 
                 # Aggregate building outputs for this subregion
                 bldg_agg = aggregate_subregion_buildings(updated_buildings) if updated_buildings else {}
@@ -671,6 +699,11 @@ def update_region_economies(
                     "building_workers": bldg_workers,
                     "building_research": bldg_research,
                     "building_transport_modifier": bldg_transport,
+                    "commodity_stocks": _apply_commodity_flows(
+                        sub.get("commodity_stocks"),
+                        _sub_produced,
+                        _sub_consumed,
+                    ),
                 }
             norm = max(1e-9, share_total)
             for sub in subregions.values():
@@ -757,6 +790,26 @@ def update_region_economies(
         0.98,
     )
 
+    # ── Phase 3: Logistics tick ──────────────────────────────────────────────
+    # Run inter-region commodity redistribution after all regions are updated.
+    logistics_raw = prior_state.get("logistics_state")
+    if not isinstance(logistics_raw, dict) or not logistics_raw.get("corridors"):
+        # First tick or missing — initialise from transport topology.
+        logistics_raw = build_initial_logistics_state(
+            transport_edges=transport_edges,
+            region_names=list(region_next.keys()),
+        )
+    region_populations = {
+        name: max(1.0, float(row.get("population", 1.0)))
+        for name, row in region_next.items()
+    }
+    region_next_after_logistics, updated_logistics = update_logistics_state(
+        logistics_state=logistics_raw,
+        regions=region_next,
+        region_populations=region_populations,
+    )
+    region_next = region_next_after_logistics
+
     return {
         "region_state": {
             "region_count": int(region_state.get("region_count", len(region_next))),
@@ -764,6 +817,7 @@ def update_region_economies(
             "transport_edges": transport_edges,
             "mean_route_cost": mean_route_cost,
             "connectivity_index": connectivity_index,
+            "logistics_state": updated_logistics,
         },
         "regional_output_gini": output_gini,
         "regional_service_gap_index": service_gap,

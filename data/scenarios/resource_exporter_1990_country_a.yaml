@@ -1,0 +1,22 @@
+scenario_id: resource_exporter_1990_country_a
+start_year: 1990
+end_year: 2100
+economy_preset: resource_exporter
+country:
+  id: country_a
+  name: Republic of Aster (Resource Export Variant)
+  regions: 11
+  population: 13000000
+macro:
+  inflation_expectation: 0.013
+  military_spend_share: 0.18
+trade:
+  exports: 14000000000
+  imports: 9800000000
+social:
+  trust: 43.0
+  legitimacy: 48.0
+  unemployment: 0.095
+notes:
+  - Resource-exporter preset with slightly higher military burden.
+  - Designed to stress external-shock sensitivity and corridor dependence.

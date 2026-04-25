@@ -23,6 +23,13 @@ from src.econ.building_types import (
     scaled_workers,
     scaled_workers_skilled,
 )
+from src.econ.industry_recipes import (
+    get_active_recipe,
+    compute_input_availability,
+    compute_commodity_outputs,
+    compute_commodity_inputs_consumed,
+)
+from src.econ.commodity_registry import build_empty_commodity_state
 
 _OWNER_CLASSES = ("capitalist", "state", "cooperative", "informal")
 
@@ -268,6 +275,7 @@ def update_building(
     maintenance_spend: float,
     human_capital: float,
     prior_state: dict[str, Any],
+    regional_stocks: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Compute the next state for a single building instance.
 
@@ -277,6 +285,9 @@ def update_building(
         maintenance_spend: 0-1 fraction of rated maintenance actually funded.
         human_capital: subregion human capital score (0-1).
         prior_state: national state dict for policy overrides.
+        regional_stocks: current commodity stocks for the subregion; used to
+            compute input availability for the building's recipe.  If None,
+            unlimited inputs are assumed (backward-compatible behaviour).
     """
     arch = get_archetype(str(building["type"]))
     degrad_rate = float(arch["degradation_rate"])
@@ -313,6 +324,17 @@ def update_building(
     if maintenance_deficit > 0.5:
         condition = max(0.0, condition - maintenance_deficit * 0.01)
 
+    # --- Commodity recipe layer ---
+    # Compute named commodity flows in parallel with the legacy output float.
+    recipe = get_active_recipe(building)
+    stocks = regional_stocks if isinstance(regional_stocks, dict) else {}
+    power_draw = float(recipe.get("power_draw", 0.0))
+    power_available = min(1.0, stocks.get("power", 1e9) / max(output * power_draw, 1e-9)) if power_draw > 0 else 1.0
+    power_availability = _clamp(power_available, 0.0, 1.0) if power_draw > 0 else 1.0
+    input_availability = compute_input_availability(recipe, stocks, output)
+    commodity_outputs = compute_commodity_outputs(recipe, output, input_availability, power_availability)
+    commodity_inputs_consumed = compute_commodity_inputs_consumed(recipe, output, input_availability, power_availability)
+
     return {
         **building,
         "condition": condition,
@@ -323,6 +345,9 @@ def update_building(
         "workers_skilled": workers_skilled,
         "age_ticks": int(building.get("age_ticks", 0)) + 1,
         "maintenance_deficit": maintenance_deficit,
+        "commodity_outputs": commodity_outputs,
+        "commodity_inputs_consumed": commodity_inputs_consumed,
+        "input_availability": input_availability,
     }
 
 
@@ -332,16 +357,38 @@ def update_subregion_buildings(
     maintenance_spend: float,
     human_capital: float,
     prior_state: dict[str, Any],
-) -> list[dict[str, Any]]:
-    """Update all buildings in a subregion and return updated list."""
+    regional_stocks: dict[str, float] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, float], dict[str, float]]:
+    """Update all buildings in a subregion and return (updated_buildings, net_produced, net_consumed).
+
+    The returned commodity dicts represent the *total* commodity flows across
+    all buildings this tick, before storage decay is applied.  Callers should
+    add net_produced to stocks and deduct net_consumed from stocks.
+
+    For backward compatibility the function also accepts callers that ignore
+    the extra return values.
+    """
+    # Use a mutable copy of stocks so each building within the tick sees the
+    # same starting stocks (no intra-tick ordering dependency).
+    stocks_snapshot: dict[str, float] = dict(regional_stocks) if isinstance(regional_stocks, dict) else {}
+
     updated: list[dict[str, Any]] = []
+    total_produced: dict[str, float] = build_empty_commodity_state()
+    total_consumed: dict[str, float] = build_empty_commodity_state()
+
     for b in buildings:
         if not isinstance(b, dict):
             continue
         sector = str(b.get("sector", b.get("type", "services")))
         demand_signal = sector_demand_signals.get(sector, 0.65)
-        updated.append(update_building(b, demand_signal, maintenance_spend, human_capital, prior_state))
-    return updated
+        updated_b = update_building(b, demand_signal, maintenance_spend, human_capital, prior_state, stocks_snapshot)
+        updated.append(updated_b)
+        for cid, amount in updated_b.get("commodity_outputs", {}).items():
+            total_produced[cid] = total_produced.get(cid, 0.0) + amount
+        for cid, amount in updated_b.get("commodity_inputs_consumed", {}).items():
+            total_consumed[cid] = total_consumed.get(cid, 0.0) + amount
+
+    return updated, total_produced, total_consumed
 
 
 # ---------------------------------------------------------------------------

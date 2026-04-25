@@ -107,6 +107,27 @@ def test_sector_sheet_commands_render_expected_fields() -> None:
     assert done_stress is False
 
 
+def test_phase6_observability_sheets_render_expected_fields() -> None:
+    engine = build_engine_from_scenario(seed=11, scenario_path="data/scenarios/baseline_1990_country_a.yaml")
+    advance_ticks(engine, 1)
+
+    msg_flow, done_flow = process_command("sheet commodity flows and storage", engine)
+    msg_choke, done_choke = process_command("sheet logistics chokepoints", engine)
+    msg_impact, done_impact = process_command("sheet shortages and class impact", engine)
+
+    assert "Sheet: Commodity Flows and Storage" in msg_flow
+    assert "Strategic Import Dependency" in msg_flow
+    assert done_flow is False
+
+    assert "Sheet: Logistics Chokepoints" in msg_choke
+    assert "Top Corridors by Congestion" in msg_choke
+    assert done_choke is False
+
+    assert "Sheet: Shortages and Class Impact" in msg_impact
+    assert "Scarcity Burden by Class" in msg_impact
+    assert done_impact is False
+
+
 def test_overview_and_state_explorer_sheets_render() -> None:
     engine = build_engine_from_scenario(seed=11, scenario_path="data/scenarios/baseline_1990_country_a.yaml")
     advance_ticks(engine, 1)

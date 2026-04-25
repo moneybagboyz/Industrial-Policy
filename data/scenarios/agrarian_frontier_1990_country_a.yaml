@@ -1,0 +1,26 @@
+scenario_id: agrarian_frontier_1990_country_a
+start_year: 1990
+end_year: 2100
+economy_preset: agrarian_frontier
+country:
+  id: country_a
+  name: Republic of Aster (Agrarian Frontier Variant)
+  regions: 8
+  population: 11000000
+preset_modifiers:
+  macro:
+    food_price_stabilization: 0.68
+    regional_equity_bias: 0.66
+  social:
+    trust: 41.0
+    legitimacy: 45.0
+macro:
+  reserves: 3.2
+  policy_rate: 0.105
+trade:
+  exports: 2400000000
+  imports: 3600000000
+social:
+  unemployment: 0.115
+notes:
+  - Low-capacity agrarian preset emphasizing food and logistics vulnerability.

@@ -6,7 +6,13 @@ import argparse
 from typing import Any
 
 from src.core.default_engine import build_engine_from_scenario
-from src.ui.insight_views import build_executive_overview_rows, build_state_explorer_rows
+from src.ui.insight_views import (
+    build_commodity_flow_rows,
+    build_executive_overview_rows,
+    build_logistics_chokepoint_rows,
+    build_shortage_class_impact_rows,
+    build_state_explorer_rows,
+)
 from src.ui.map_ascii import render_region_ascii_map
 from src.ui.sheets import default_sheet_names
 from src.ui.table_dashboard import render_matrix_table, render_table
@@ -152,6 +158,12 @@ def render_sheet_detail(sheet_name: str, state: dict[str, Any]) -> str:
         return render_table("Sheet: Executive Overview", build_executive_overview_rows(state))
     if normalized == "state explorer":
         return render_table("Sheet: State Explorer", build_state_explorer_rows(state))
+    if normalized == "commodity flows and storage":
+        return render_table("Sheet: Commodity Flows and Storage", build_commodity_flow_rows(state))
+    if normalized == "logistics chokepoints":
+        return render_table("Sheet: Logistics Chokepoints", build_logistics_chokepoint_rows(state))
+    if normalized == "shortages and class impact":
+        return render_table("Sheet: Shortages and Class Impact", build_shortage_class_impact_rows(state))
     if normalized == "regional map (ascii)":
         return f"Sheet: Regional Map (ASCII)\n{render_region_ascii_map(state)}"
     keys = sheet_map.get(normalized)

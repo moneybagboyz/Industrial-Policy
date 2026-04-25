@@ -12,6 +12,7 @@ from src.econ.inventory import next_inventory, unmet_demand
 from src.econ.labor import bounded_next_wage, next_unemployment, wage_growth_rate
 from src.econ.pricing import PricingParams, next_price
 from src.econ.sector_network import simulate_sector_network
+from src.econ.social_demand import compute_social_demand_signals
 from src.econ.building_types import get_archetype
 from src.econ.building_engine import make_building_from_queue_item
 from src.social.cohorts import next_population
@@ -283,6 +284,11 @@ def update_class_dynamics(prior_state: dict[str, Any], context: dict[str, Any]) 
     external_stress = float(prior_state.get("external_stress", 0.0))
     regional_inequality = float(prior_state.get("regional_inequality_index", 0.25))
     regional_service_gap = float(prior_state.get("regional_service_gap_index", 0.20))
+    scarcity_workers = _clamp(float(prior_state.get("scarcity_burden_workers", 0.0)), 0.0, 1.0)
+    scarcity_professionals = _clamp(float(prior_state.get("scarcity_burden_professionals", 0.0)), 0.0, 1.0)
+    scarcity_capitalists = _clamp(float(prior_state.get("scarcity_burden_capitalists", 0.0)), 0.0, 1.0)
+    scarcity_informal = _clamp(float(prior_state.get("scarcity_burden_informal", 0.0)), 0.0, 1.0)
+    informal_market_response = _clamp(float(prior_state.get("informal_market_response", 0.0)), 0.0, 1.0)
 
     nominal_gdp_annual = max(1.0, float(prior_state.get("nominal_gdp_monthly", 1_000_000_000.0)) * 12.0)
     debt_ratio = float(prior_state.get("debt", 0.0)) / nominal_gdp_annual
@@ -318,6 +324,7 @@ def update_class_dynamics(prior_state: dict[str, Any], context: dict[str, Any]) 
         float(prior_state.get("informal_income_share", 0.04))
         + unemployment * 0.06
         + external_stress * 0.02
+        + informal_market_response * 0.03
         + bldg_inf_frac * 0.015,   # informal buildings raise informal share
         0.03,
         0.12,
@@ -369,11 +376,23 @@ def update_class_dynamics(prior_state: dict[str, Any], context: dict[str, Any]) 
         0.0,
         100.0,
     )
+    support_workers = _clamp(
+        support_workers
+        - scarcity_workers * 14.0
+        + float(prior_state.get("rationing_intensity", 0.0)) * 2.5,
+        0.0,
+        100.0,
+    )
     support_professionals = _clamp(
         float(prior_state.get("class_support_professionals", 50.0))
         + info_quality * 8.0
         - corruption * 10.0
         - external_stress * 8.0,
+        0.0,
+        100.0,
+    )
+    support_professionals = _clamp(
+        support_professionals - scarcity_professionals * 10.0,
         0.0,
         100.0,
     )
@@ -386,11 +405,21 @@ def update_class_dynamics(prior_state: dict[str, Any], context: dict[str, Any]) 
         0.0,
         100.0,
     )
+    support_capitalists = _clamp(
+        support_capitalists - scarcity_capitalists * 12.0,
+        0.0,
+        100.0,
+    )
     support_informal = _clamp(
         float(prior_state.get("class_support_informal", 46.0))
         + spend_ratio * 16.0
         - poverty_headcount * 20.0
         - max(0.0, inflation_proxy) * 40.0,
+        0.0,
+        100.0,
+    )
+    support_informal = _clamp(
+        support_informal - scarcity_informal * 13.0 + informal_market_response * 4.0,
         0.0,
         100.0,
     )
@@ -484,7 +513,18 @@ def update_social_political(prior_state: dict[str, Any], context: dict[str, Any]
     external_stress = float(prior_state.get("external_stress", 0.0))
     reserve_pressure = 1.0 if reserves <= 1.0 else 0.0
     inflation_proxy = float(prior_state.get("inflation_proxy", 0.0))
-    service_perf = max(0.0, float(prior_state.get("service_perf", 0.6)) - reserve_pressure * 0.1 - external_stress * 0.05)
+    scarcity_workers = _clamp(float(prior_state.get("scarcity_burden_workers", 0.0)), 0.0, 1.0)
+    scarcity_professionals = _clamp(float(prior_state.get("scarcity_burden_professionals", 0.0)), 0.0, 1.0)
+    scarcity_informal = _clamp(float(prior_state.get("scarcity_burden_informal", 0.0)), 0.0, 1.0)
+    rationing_intensity = _clamp(float(prior_state.get("rationing_intensity", 0.0)), 0.0, 1.0)
+    informal_market_response = _clamp(float(prior_state.get("informal_market_response", 0.0)), 0.0, 1.0)
+    service_perf = max(
+        0.0,
+        float(prior_state.get("service_perf", 0.6))
+        - reserve_pressure * 0.1
+        - external_stress * 0.05
+        - scarcity_professionals * 0.08,
+    )
     real_income_signal = (
         float(prior_state.get("real_income_signal", 0.5))
         - max(0.0, float(prior_state.get("expected_inflation", 0.01)) - 0.01) * 0.6
@@ -495,10 +535,14 @@ def update_social_political(prior_state: dict[str, Any], context: dict[str, Any]
         1.0,
         max(
             0.0,
-            float(prior_state.get("needs_gap", 0.2))
+            float(prior_state.get("needs_gap_from_blocs", prior_state.get("needs_gap", 0.2)))
             + (0.05 if current_account < 0.0 else 0.0)
             + inflation_proxy * 0.10
-            + external_stress * 0.06,
+            + external_stress * 0.06
+            + scarcity_workers * 0.10
+            + scarcity_informal * 0.10
+            - rationing_intensity * 0.05
+            - informal_market_response * 0.04,
         ),
     )
 
@@ -534,6 +578,11 @@ def update_social_political(prior_state: dict[str, Any], context: dict[str, Any]
         z2=0.2,
         z3=0.05,
         z4=0.05,
+    )
+    trust = _clamp(
+        trust - scarcity_workers * 4.0 - scarcity_informal * 5.0 + rationing_intensity * 1.0,
+        0.0,
+        100.0,
     )
 
     unrest = unrest_risk(
@@ -627,7 +676,12 @@ def update_logistics_and_market(prior_state: dict[str, Any], context: dict[str, 
     demand = max(1.0, float(prior_state.get("demand", 100.0)))
     fx_delta = float(prior_state.get("fx_delta", 0.0))
 
-    goods_shortage_pressure = _clamp(unmet / demand + sanctions * 0.15 + fx_delta * 0.8, 0.0, 1.0)
+    social_demand = compute_social_demand_signals(prior_state)
+    goods_shortage_pressure = _clamp(
+        unmet / demand + sanctions * 0.15 + fx_delta * 0.8 + float(social_demand.get("demand_bloc_household_pressure", 0.0)) * 0.35,
+        0.0,
+        1.0,
+    )
     logistics_bottleneck = _clamp((1.0 - infrastructure) * 0.55 + (1.0 - trade_access) * 0.25 + sanctions * 0.20, 0.0, 1.0)
     market_tightness = _clamp(goods_shortage_pressure * 0.7 + logistics_bottleneck * 0.3, 0.0, 1.0)
 
@@ -636,6 +690,7 @@ def update_logistics_and_market(prior_state: dict[str, Any], context: dict[str, 
         "logistics_bottleneck_index": logistics_bottleneck,
         "market_tightness": market_tightness,
         "cost_delta": float(prior_state.get("cost_delta", 0.005)) + goods_shortage_pressure * 0.01,
+        **social_demand,
     }
 
 

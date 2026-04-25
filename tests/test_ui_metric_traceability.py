@@ -6,11 +6,14 @@ from src.ui.sheets import default_sheet_names
 
 def test_default_sheets_present() -> None:
     sheets = default_sheet_names()
-    assert len(sheets) == 21
+    assert len(sheets) == 24
     assert "Executive Overview" in sheets
     assert "State Explorer" in sheets
     assert "Sector Output and Capacity" in sheets
     assert "Supply Chain Stress Map" in sheets
+    assert "Commodity Flows and Storage" in sheets
+    assert "Logistics Chokepoints" in sheets
+    assert "Shortages and Class Impact" in sheets
     assert "Regional Map (ASCII)" in sheets
     assert "Class and Inequality Dynamics" in sheets
     assert "World Diplomacy and External Risks" in sheets

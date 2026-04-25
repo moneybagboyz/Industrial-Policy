@@ -7,8 +7,177 @@ from typing import Any
 
 import yaml
 from src.econ.regional_profiles import build_initial_region_state
+from src.econ.logistics_network import build_initial_logistics_state
 from src.core.policy_system import DEFAULT_ACTIVE_POLICIES, initial_ministry_budgets
 from src.core.ideology_traditions import initial_tradition_influence
+
+
+DEFAULT_ECONOMY_PRESET = "balanced_baseline"
+
+# Curated economy identities used to seed scenarios.
+ECONOMY_PRESETS: dict[str, dict[str, Any]] = {
+    "balanced_baseline": {
+        "description": "Mixed economy with moderate trade exposure and gradual industrialization.",
+        "country": {"regions": 8},
+        "macro": {
+            "nominal_gdp": 180_000_000_000.0,
+            "debt_stock": 90_000_000_000.0,
+            "reserves": 6.0,
+            "policy_rate": 0.08,
+            "inflation_expectation": 0.01,
+            "tax_ratio": 0.20,
+            "spend_ratio": 0.205,
+            "infrastructure_spend_share": 0.24,
+            "industrial_policy_bias": 0.50,
+            "food_price_stabilization": 0.40,
+            "regional_equity_bias": 0.50,
+            "diplomacy_posture": 0.50,
+        },
+        "trade": {
+            "exports": 8_000_000_000.0,
+            "imports": 8_400_000_000.0,
+            "net_factor_income": 250_000_000.0,
+            "transfers": 180_000_000.0,
+        },
+        "social": {
+            "trust": 47.0,
+            "legitimacy": 51.0,
+            "inequality": 45.0,
+            "unemployment": 0.085,
+            "population_growth_monthly": 0.00045,
+            "corruption": 0.30,
+            "info_quality": 0.60,
+        },
+    },
+    "resource_exporter": {
+        "description": "Commodity-export heavy economy with weaker diversification and higher external exposure.",
+        "country": {"regions": 9},
+        "macro": {
+            "nominal_gdp": 210_000_000_000.0,
+            "debt_stock": 95_000_000_000.0,
+            "reserves": 8.0,
+            "policy_rate": 0.09,
+            "inflation_expectation": 0.012,
+            "tax_ratio": 0.19,
+            "spend_ratio": 0.20,
+            "infrastructure_spend_share": 0.22,
+            "industrial_policy_bias": 0.38,
+            "food_price_stabilization": 0.34,
+            "regional_equity_bias": 0.44,
+            "diplomacy_posture": 0.56,
+        },
+        "trade": {
+            "exports": 12_000_000_000.0,
+            "imports": 9_200_000_000.0,
+            "net_factor_income": 150_000_000.0,
+            "transfers": 120_000_000.0,
+        },
+        "social": {
+            "trust": 44.0,
+            "legitimacy": 49.0,
+            "inequality": 51.0,
+            "unemployment": 0.092,
+            "population_growth_monthly": 0.00042,
+            "corruption": 0.35,
+            "info_quality": 0.55,
+        },
+    },
+    "import_substitution": {
+        "description": "State-led domestic industrial deepening with higher protection and public investment.",
+        "country": {"regions": 10},
+        "macro": {
+            "nominal_gdp": 195_000_000_000.0,
+            "debt_stock": 110_000_000_000.0,
+            "reserves": 5.0,
+            "policy_rate": 0.07,
+            "inflation_expectation": 0.013,
+            "tax_ratio": 0.22,
+            "spend_ratio": 0.225,
+            "infrastructure_spend_share": 0.30,
+            "industrial_policy_bias": 0.72,
+            "food_price_stabilization": 0.46,
+            "regional_equity_bias": 0.58,
+            "diplomacy_posture": 0.46,
+        },
+        "trade": {
+            "exports": 6_500_000_000.0,
+            "imports": 7_800_000_000.0,
+            "net_factor_income": 80_000_000.0,
+            "transfers": 140_000_000.0,
+        },
+        "social": {
+            "trust": 50.0,
+            "legitimacy": 54.0,
+            "inequality": 43.0,
+            "unemployment": 0.088,
+            "population_growth_monthly": 0.00047,
+            "corruption": 0.28,
+            "info_quality": 0.58,
+        },
+    },
+    "agrarian_frontier": {
+        "description": "Low-capacity agrarian economy with high food sensitivity and logistics constraints.",
+        "country": {"regions": 7},
+        "macro": {
+            "nominal_gdp": 95_000_000_000.0,
+            "debt_stock": 45_000_000_000.0,
+            "reserves": 3.5,
+            "policy_rate": 0.10,
+            "inflation_expectation": 0.016,
+            "tax_ratio": 0.17,
+            "spend_ratio": 0.185,
+            "infrastructure_spend_share": 0.20,
+            "industrial_policy_bias": 0.28,
+            "food_price_stabilization": 0.60,
+            "regional_equity_bias": 0.62,
+            "diplomacy_posture": 0.42,
+        },
+        "trade": {
+            "exports": 2_300_000_000.0,
+            "imports": 3_200_000_000.0,
+            "net_factor_income": 20_000_000.0,
+            "transfers": 90_000_000.0,
+        },
+        "social": {
+            "trust": 42.0,
+            "legitimacy": 46.0,
+            "inequality": 49.0,
+            "unemployment": 0.11,
+            "population_growth_monthly": 0.00052,
+            "corruption": 0.33,
+            "info_quality": 0.50,
+        },
+    },
+}
+
+
+def _merge_mapping(base: dict[str, Any], override: Any) -> dict[str, Any]:
+    merged = dict(base)
+    if isinstance(override, dict):
+        for key, value in override.items():
+            merged[key] = value
+    return merged
+
+
+def _resolve_sections(data: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+    requested = str(data.get("economy_preset", DEFAULT_ECONOMY_PRESET))
+    preset_key = requested if requested in ECONOMY_PRESETS else DEFAULT_ECONOMY_PRESET
+    preset = ECONOMY_PRESETS[preset_key]
+
+    country = _merge_mapping(preset.get("country", {}), data.get("country", {}))
+    macro = _merge_mapping(preset.get("macro", {}), data.get("macro", {}))
+    trade = _merge_mapping(preset.get("trade", {}), data.get("trade", {}))
+    social = _merge_mapping(preset.get("social", {}), data.get("social", {}))
+
+    # Optional nested overrides for quick tuning without expanding every section.
+    modifiers = data.get("preset_modifiers", {})
+    if isinstance(modifiers, dict):
+        country = _merge_mapping(country, modifiers.get("country", {}))
+        macro = _merge_mapping(macro, modifiers.get("macro", {}))
+        trade = _merge_mapping(trade, modifiers.get("trade", {}))
+        social = _merge_mapping(social, modifiers.get("social", {}))
+
+    return preset_key, country, macro, trade, social
 
 
 def load_scenario_file(path: str | Path) -> dict[str, Any]:
@@ -26,10 +195,7 @@ def load_scenario_file(path: str | Path) -> dict[str, Any]:
 
 
 def initial_state_from_scenario(data: dict[str, Any]) -> dict[str, Any]:
-    macro = data.get("macro", {})
-    trade = data.get("trade", {})
-    social = data.get("social", {})
-    country = data.get("country", {})
+    preset_key, country, macro, trade, social = _resolve_sections(data)
 
     population = float(social.get("population", country.get("population", 1_000_000.0)))
     nominal_gdp = float(macro.get("nominal_gdp", 12_000_000_000.0))
@@ -43,12 +209,21 @@ def initial_state_from_scenario(data: dict[str, Any]) -> dict[str, Any]:
     region_count = int(country.get("regions", 6))
     region_state = build_initial_region_state(region_count=region_count, population=population, scenario_id=scenario_id)
 
+    transport_edges = region_state.get("transport_edges", {})
+    region_names = list(region_state.get("regions", {}).keys())
+    initial_logistics = build_initial_logistics_state(
+        transport_edges=transport_edges,
+        region_names=region_names,
+    )
+    region_state["logistics_state"] = initial_logistics
+
     sector_output_primary = capacity_output * 0.28
     sector_output_secondary = capacity_output * 0.40
     sector_output_tertiary = capacity_output * 0.32
 
     return {
         "scenario_id": scenario_id,
+        "economy_preset": preset_key,
         "region_count": region_count,
         "region_state": region_state,
         "world_state": {

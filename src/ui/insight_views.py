@@ -4,6 +4,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.econ.commodity_registry import COMMODITY_CATALOG, STRATEGIC_COMMODITIES
+from src.econ.logistics_network import (
+    aggregate_region_stocks,
+    corridor_summary,
+    estimate_region_demand,
+    top_shortfalls,
+)
+
 
 def _risk_bucket(value: float, low: float, medium: float, high: float) -> str:
     if value <= low:
@@ -294,4 +302,147 @@ def build_consequence_queue_rows(state: dict[str, Any]) -> list[tuple[str, str]]
             pname   = str(item.get("policy_name", "?"))
             effects = str(item.get("effects", {}))[:60]
             rows.append((pname, effects))
+    return rows
+
+
+def _collect_national_commodity_totals(region_state: dict[str, Any]) -> tuple[dict[str, float], dict[str, float]]:
+    """Return (stock_totals, demand_totals) across all regions."""
+    regions = region_state.get("regions", {}) if isinstance(region_state, dict) else {}
+    if not isinstance(regions, dict):
+        return {}, {}
+
+    stock_totals: dict[str, float] = {}
+    demand_totals: dict[str, float] = {}
+
+    for region_name, payload in regions.items():
+        if not isinstance(payload, dict):
+            continue
+        pop = max(1.0, float(payload.get("population", 1.0)))
+        region_stocks = aggregate_region_stocks(payload)
+        for cid, amount in region_stocks.items():
+            stock_totals[cid] = stock_totals.get(cid, 0.0) + max(0.0, float(amount))
+        for cid in COMMODITY_CATALOG:
+            demand_totals[cid] = demand_totals.get(cid, 0.0) + estimate_region_demand(pop, cid)
+
+    return stock_totals, demand_totals
+
+
+def _storage_days(stock: float, demand_per_tick: float) -> float:
+    if demand_per_tick <= 1e-9:
+        return 365.0
+    return min(365.0, stock / demand_per_tick * 30.0)
+
+
+def build_commodity_flow_rows(state: dict[str, Any], top_n: int = 10) -> list[tuple[str, str]]:
+    """Commodity flow sheet: stocks, deficits, and import dependency anchors."""
+    region_state = state.get("region_state", {})
+    logistics = region_state.get("logistics_state", {}) if isinstance(region_state, dict) else {}
+    stocks, demand = _collect_national_commodity_totals(region_state if isinstance(region_state, dict) else {})
+
+    deficits = top_shortfalls(logistics, n=top_n)
+    sorted_stock = sorted(stocks.items(), key=lambda x: -x[1])[:top_n]
+
+    rows: list[tuple[str, str]] = [
+        ("Tracked Commodities", str(len(COMMODITY_CATALOG))),
+        ("Strategic Commodities", str(len(STRATEGIC_COMMODITIES))),
+        ("Flow Snapshot", "stocks + deficits + dependency"),
+        ("─── Top National Stocks ───", "commodity | stock | est_storage_days"),
+    ]
+    if not sorted_stock:
+        rows.append(("(none)", "No commodity stocks recorded yet"))
+    for cid, amount in sorted_stock:
+        rows.append((
+            cid,
+            f"stock={amount:.4f}  est_days={_storage_days(amount, demand.get(cid, 0.0)):.1f}",
+        ))
+
+    rows.append(("─── Top National Deficits ───", "commodity | deficit"))
+    if not deficits:
+        rows.append(("(none)", "No deficit entries yet"))
+    for row in deficits:
+        cid = str(row.get("commodity", "?"))
+        deficit = float(row.get("deficit", 0.0))
+        rows.append((cid, f"deficit={deficit:.4f}"))
+
+    rows.append(("─── Strategic Import Dependency ───", "commodity | importability | storage_days"))
+    for cid in sorted(STRATEGIC_COMMODITIES):
+        importability = float(COMMODITY_CATALOG.get(cid, {}).get("importability", 0.0))
+        amount = stocks.get(cid, 0.0)
+        rows.append((
+            cid,
+            f"importability={importability:.2f}  est_days={_storage_days(amount, demand.get(cid, 0.0)):.1f}",
+        ))
+    return rows
+
+
+def build_logistics_chokepoint_rows(state: dict[str, Any], top_n: int = 12) -> list[tuple[str, str]]:
+    """Logistics chokepoint sheet: corridor utilization and congestion."""
+    region_state = state.get("region_state", {})
+    logistics = region_state.get("logistics_state", {}) if isinstance(region_state, dict) else {}
+    rows = [
+        ("Chokepoint View", "corridor congestion and throughput"),
+        ("Constrained Corridors", str(len(logistics.get("congested_corridors", [])) if isinstance(logistics, dict) else 0)),
+        ("─── Top Corridors by Congestion ───", "edge | util | congestion | flow | friction"),
+    ]
+
+    summary = corridor_summary(logistics if isinstance(logistics, dict) else {})[:top_n]
+    if not summary:
+        rows.append(("(none)", "No corridor metrics available"))
+        return rows
+
+    for entry in summary:
+        edge = str(entry.get("edge", "?"))
+        util = float(entry.get("utilization", 0.0))
+        cong = float(entry.get("congestion_ratio", 0.0))
+        flow = float(entry.get("total_flow", 0.0))
+        friction = float(entry.get("friction", 0.0))
+        rows.append((edge, f"util={util:.3f}  cong={cong:.3f}  flow={flow:.4f}  friction={friction:.3f}"))
+    return rows
+
+
+def build_shortage_class_impact_rows(state: dict[str, Any]) -> list[tuple[str, str]]:
+    """Shortages and class-impact sheet: scarcity burdens plus adaptation channels."""
+    sw = float(state.get("scarcity_burden_workers", 0.0))
+    sp = float(state.get("scarcity_burden_professionals", 0.0))
+    sc = float(state.get("scarcity_burden_capitalists", 0.0))
+    si = float(state.get("scarcity_burden_informal", 0.0))
+    burdens = {
+        "workers": sw,
+        "professionals": sp,
+        "capitalists": sc,
+        "informal": si,
+    }
+    hardest = max(burdens.items(), key=lambda x: x[1])[0] if burdens else "n/a"
+
+    rows = [
+        ("Demand Pressure (Household)", f"{float(state.get('demand_bloc_household_pressure', 0.0)):.3f}"),
+        ("Demand Pressure (Institutional)", f"{float(state.get('demand_bloc_institutional_pressure', 0.0)):.3f}"),
+        ("Demand Pressure (Productive)", f"{float(state.get('demand_bloc_productive_pressure', 0.0)):.3f}"),
+        ("Needs Gap (From Blocs)", f"{float(state.get('needs_gap_from_blocs', state.get('needs_gap', 0.0))):.3f}"),
+        ("Rationing Intensity", f"{float(state.get('rationing_intensity', 0.0)):.3f}"),
+        ("Informal Market Response", f"{float(state.get('informal_market_response', 0.0)):.3f}"),
+        ("Hardest-hit Class", hardest),
+        ("─── Scarcity Burden by Class ───", "0=none | 1=severe"),
+        ("workers", f"{sw:.3f}"),
+        ("professionals", f"{sp:.3f}"),
+        ("capitalists", f"{sc:.3f}"),
+        ("informal", f"{si:.3f}"),
+        ("─── Political Impact (Current) ───", "support | unrest"),
+        (
+            "workers",
+            f"support={float(state.get('class_support_workers', 0.0)):.1f}  unrest={float(state.get('class_unrest_workers', 0.0)):.1f}",
+        ),
+        (
+            "professionals",
+            f"support={float(state.get('class_support_professionals', 0.0)):.1f}  unrest={float(state.get('class_unrest_professionals', 0.0)):.1f}",
+        ),
+        (
+            "capitalists",
+            f"support={float(state.get('class_support_capitalists', 0.0)):.1f}  unrest={float(state.get('class_unrest_capitalists', 0.0)):.1f}",
+        ),
+        (
+            "informal",
+            f"support={float(state.get('class_support_informal', 0.0)):.1f}  unrest={float(state.get('class_unrest_informal', 0.0)):.1f}",
+        ),
+    ]
     return rows

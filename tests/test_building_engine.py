@@ -213,7 +213,7 @@ def test_aggregate_subregion_buildings_keys() -> None:
 
 def test_update_subregion_buildings_returns_list_same_length() -> None:
     buildings = seed_buildings_for_subregion("sub", "agrarian", 500_000, 0.5, 0.5, 10, 0)
-    updated = update_subregion_buildings(
+    updated, _produced, _consumed = update_subregion_buildings(
         buildings=buildings,
         sector_demand_signals={"agriculture": 0.7, "energy": 0.5},
         maintenance_spend=0.4,

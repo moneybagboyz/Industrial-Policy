@@ -28,11 +28,14 @@ from textual.widgets import (
 from src.core.default_engine import build_engine_from_scenario
 from src.ui.insight_views import (
     build_building_inventory_rows,
+    build_commodity_flow_rows,
     build_consequence_queue_rows,
     build_construction_pipeline_rows,
     build_executive_overview_rows,
+    build_logistics_chokepoint_rows,
     build_policy_dashboard_rows,
     build_policy_graveyard_rows,
+    build_shortage_class_impact_rows,
     build_state_explorer_rows,
     build_tradition_influence_rows,
 )
@@ -89,6 +92,9 @@ SHEET_FIELDS: dict[str, list[str]] = {
         "regional_employment_gap_index",
         "regional_representation_gap",
     ],
+    "Commodity Flows and Storage": ["demand_bloc_household_pressure"],
+    "Logistics Chokepoints": ["logistics_bottleneck_index"],
+    "Shortages and Class Impact": ["needs_gap", "class_conflict_pressure"],
     "Regional Map (ASCII)": ["map_ascii_line_00"],
     "World Diplomacy and External Risks": [
         "trade_access_index",
@@ -172,6 +178,9 @@ SCOPE_VIEWS: dict[str, list[str]] = {
         "Sector Output and Capacity",
         "Sector Prices and Shortages",
         "Supply Chain Stress Map",
+        "Commodity Flows and Storage",
+        "Logistics Chokepoints",
+        "Shortages and Class Impact",
         "Building Inventory",
         "Construction Pipeline",
         "Policy Dashboard",
@@ -201,6 +210,9 @@ SCOPE_VIEWS: dict[str, list[str]] = {
         "Sector Output and Capacity",
         "Sector Prices and Shortages",
         "Supply Chain Stress Map",
+        "Commodity Flows and Storage",
+        "Logistics Chokepoints",
+        "Shortages and Class Impact",
         "Building Inventory",
         "Construction Pipeline",
         "Policy Dashboard",
@@ -219,6 +231,9 @@ SCOPE_VIEWS: dict[str, list[str]] = {
         "Production and Supply Chains",
         "Sector Prices and Shortages",
         "Supply Chain Stress Map",
+        "Commodity Flows and Storage",
+        "Logistics Chokepoints",
+        "Shortages and Class Impact",
         "Building Inventory",
         "Construction Pipeline",
         "Labor and Income Distribution",
@@ -386,6 +401,18 @@ class SheetPanel(Static):
             return
         if sheet_name == "Construction Pipeline":
             for key, value in build_construction_pipeline_rows(state):
+                t.add_row(key, value)
+            return
+        if sheet_name == "Commodity Flows and Storage":
+            for key, value in build_commodity_flow_rows(state):
+                t.add_row(key, value)
+            return
+        if sheet_name == "Logistics Chokepoints":
+            for key, value in build_logistics_chokepoint_rows(state):
+                t.add_row(key, value)
+            return
+        if sheet_name == "Shortages and Class Impact":
+            for key, value in build_shortage_class_impact_rows(state):
                 t.add_row(key, value)
             return
         if sheet_name == "Policy Dashboard":
