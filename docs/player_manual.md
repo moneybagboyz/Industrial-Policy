@@ -173,7 +173,7 @@ A building at condition 0.5 and quality 0.7 operates at 35% of its theoretical m
 ### The Labor Market
 
 Wages are determined by a modified Phillips curve:
-```
+```text
 wage_growth = 0.6 × productivity_growth - 0.35 × (unemployment - natural_unemployment) + 0.18 × expected_inflation
 ```
 
@@ -242,7 +242,7 @@ Nationalization, land redistribution, or cooperative enterprise programs change 
 ### Condition Degradation and Maintenance
 
 Every building loses condition each tick without maintenance. The degradation rate is fixed per archetype (0.004–0.011 condition points per tick). Maintenance spending partially offsets this. The recovery formula is:
-```
+```text
 condition_delta = upkeep_recovery × capacity_modifier × legitimacy_modifier  (if funded)
 condition_delta = -degradation_rate / (capacity_modifier × legitimacy_modifier)  (if unfunded)
 ```
@@ -355,7 +355,7 @@ The logistics network connects regions via transport corridors. Each corridor ha
 - **friction**: 0–1 transit cost/spoilage multiplier
 - **congestion_ratio**: 0 below 75% utilization; reaches 1.0 at 100% utilization
 
-Spoilage in transit: `loss_rate = friction × perishability × 5.0` (capped at 40%)
+Spoilage in transit: `loss_rate = friction × perishability × 5.0` (capped at 40%; the 5.0 is a transit-time scalar reflecting that goods in a standard corridor spend the equivalent of 5 exposure cycles in transit)
 
 A corridor with friction 0.30 carrying staple_food (perishability 0.04) loses `0.30 × 0.04 × 5.0 = 6%` of each shipment. The same corridor carrying medicine (perishability 0.02) loses 3%.
 
@@ -386,7 +386,7 @@ Risk premium rises when:
 - Debt-to-GDP exceeds 75%: `+0.03 per unit above 0.75`
 
 Risk premium feeds back into the effective debt rate:
-```
+```text
 debt_rate_next = 0.75 × current_rate + 0.25 × (policy_rate + risk_premium)
 ```
 
@@ -426,7 +426,7 @@ Trade liberalization (from the liberal_institutionalism tradition) raises both e
 ### Political Bandwidth
 
 Every policy action costs bandwidth. Your bandwidth regenerates each tick:
-```
+```text
 bandwidth_regen = 20 + floor(legitimacy × 0.25 + coalition_cohesion × 15)
 ```
 Maximum regeneration is 60 units per tick. At low legitimacy (20) and poor coalition cohesion (0.3), you regenerate roughly 24 units per tick. At high legitimacy (80) and strong cohesion (0.9), you regenerate 47 units.
@@ -456,7 +456,7 @@ High institutional quality reduces costs by up to 50%. Low institutional quality
 Every active policy has a vitality value (0–100). Vitality starts at 50 when a policy is created. It recovers at 4.0 points/tick when upkeep is funded, and decays at 2.5 points/tick when unfunded. Both rates are moderated by institutional quality and legitimacy.
 
 **Realized policy value** is computed from:
-```
+```text
 capacity_factor = bureaucratic_reach × 0.5 + legitimacy_norm × 0.3 + vitality/100 × 0.2
 realized = formal_value × max(0, capacity_factor - elite_capture × 0.4)
 ```
@@ -646,7 +646,7 @@ Crisis intensity is a composite index combining:
 ### Unrest Risk Formula
 
 The simulation computes unrest risk each tick from:
-```
+```text
 unrest = base + θ1×needs_gap + θ2×inflation + θ3×unemployment + θ4×inequality
          - θ5×legitimacy - θ6×state_capacity + θ7×repression
 ```
@@ -657,7 +657,7 @@ unrest = base + θ1×needs_gap + θ2×inflation + θ3×unemployment + θ4×inequ
 
 ### Legitimacy Formula
 
-```
+```text
 legitimacy_delta = l1×service_performance + l2×real_income - l3×corruption - l4×repression_excess + l5×fairness
 ```
 
@@ -669,7 +669,7 @@ legitimacy_delta = l1×service_performance + l2×real_income - l3×corruption - 
 
 ### Trust Formula
 
-```
+```text
 trust_delta = z1×legitimacy + z2×info_quality - z3×polarization - z4×inequality_shock
 ```
 
